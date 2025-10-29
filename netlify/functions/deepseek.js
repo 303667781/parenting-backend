@@ -1,4 +1,4 @@
-// Netlify函数 - 绝对能工作版本
+// Netlify函数 - 完整版（包含DeepSeek AI）
 exports.handler = async (event, context) => {
   console.log('=== Netlify函数被调用 ===', event.httpMethod);
   
@@ -9,58 +9,98 @@ exports.handler = async (event, context) => {
     'Access-Control-Allow-Headers': 'Content-Type'
   };
   
-  // 处理OPTIONS预检请求 - 立即返回
+  // 处理OPTIONS预检请求
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers,
-      body: ''
-    };
+    return { statusCode: 200, headers, body: '' };
   }
   
-  // 处理GET请求 - 立即返回
+  // 处理GET请求
   if (event.httpMethod === 'GET') {
     const response = {
       status: 'success',
       message: '🎉 Netlify后端服务正常运行！',
       timestamp: new Date().toISOString(),
       platform: 'Netlify',
-      region: process.env.AWS_REGION || 'unknown'
+      hasAI: true
     };
     
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify(response)
-    };
+    return { statusCode: 200, headers, body: JSON.stringify(response) };
   }
   
   // 处理POST请求
   if (event.httpMethod === 'POST') {
     try {
-      console.log('POST请求体:', event.body);
-      
       const body = JSON.parse(event.body || '{}');
-      const { message = '无消息', scene = 'general' } = body;
+      const { message = '', scene = 'general' } = body;
       
-      // 立即返回成功响应
-      const responseData = {
-        success: true,
-        reply: `✅ Netlify后端连接成功！\n\n您的消息："${message}"\n场景：${scene}\n\n这是通过Netlify部署的后端服务，国内访问更稳定！`,
-        debug: {
-          timestamp: new Date().toISOString(),
-          platform: 'Netlify',
-          messageLength: message.length,
-          scene: scene,
-          note: '这是测试响应，稍后配置DeepSeek API'
-        }
+      // 场景提示词
+      const scenePrompts = {
+        homework: "你是亲子沟通专家，擅长作业辅导场景。请提供专业、实用的沟通建议。",
+        emotion: "你是亲子沟通专家，擅长情绪管理场景。请帮助家长理解孩子情绪。",
+        discipline: "你是亲子沟通专家，擅长行为规范场景。请帮助设定合理界限。",
+        screen: "你是亲子沟通专家，擅长屏幕时间管理场景。请帮助平衡数字生活。",
+        friend: "你是亲子沟通专家，擅长朋友关系场景。请帮助处理同伴关系。",
+        school: "你是亲子沟通专家，擅长学校生活场景。请帮助应对学业压力。"
       };
       
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify(responseData)
-      };
+      const systemPrompt = scenePrompts[scene] || "你是亲子沟通专家，请提供专业、实用的沟通建议。";
+      
+      // 获取API密钥
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      
+      if (!apiKey) {
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: '服务器未配置API密钥'
+          })
+        };
+      }
+      
+      // 调用DeepSeek API
+      const deepseekResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt
+            },
+            {
+              role: "user",
+              content: message
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 800
+        })
+      });
+      
+      if (!deepseekResponse.ok) {
+        throw new Error(`DeepSeek API错误: ${deepseekResponse.status}`);
+      }
+      
+      const data = await deepseekResponse.json();
+      
+      if (data.choices && data.choices.length > 0) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            reply: data.choices[0].message.content
+          })
+        };
+      } else {
+        throw new Error('AI返回数据异常');
+      }
       
     } catch (error) {
       console.error('处理错误:', error);
@@ -69,16 +109,15 @@ exports.handler = async (event, context) => {
         headers,
         body: JSON.stringify({
           success: false,
-          error: '处理失败: ' + error.message
+          error: '服务暂时不可用: ' + error.message
         })
       };
     }
   }
   
-  // 其他HTTP方法
   return {
     statusCode: 405,
     headers,
-    body: JSON.stringify({ error: '方法不允许: ' + event.httpMethod })
+    body: JSON.stringify({ error: '方法不允许' })
   };
 };
