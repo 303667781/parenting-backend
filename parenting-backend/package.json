@@ -1,10 +1,4 @@
 {
-  "name": "parenting-backend",
-  "version": "1.0.0",
-  "scripts": {
-    "dev": "vercel dev"
-  },
-  "dependencies": {
-    "node-fetch": "^2.6.7"
-  }
+  "name": "parenting-backend-one",
+  "version": "1.0.0"
 }
