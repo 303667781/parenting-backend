@@ -1,5 +1,5 @@
 [build]
-  publish = "."
+  publish = "parenting-frontend"  # 指向前端文件夹
 
 [[redirects]]
   from = "/api/*"
@@ -8,3 +8,9 @@
 
 [functions]
   directory = "netlify/functions"
+
+# SPA 支持，确保路由正确
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
