@@ -1,4 +1,3 @@
-// 修复版后端代码 - 无重复变量声明
 // 专业版提示词系统
 const scenePrompts = {
     // 完整专业回复
@@ -21,35 +20,53 @@ const scenePrompts = {
     }
 };
 
-module.exports = async (req, res) => {
-    console.log('=== 收到请求 ===', req.method);
+// Netlify 函数格式
+exports.handler = async function(event, context) {
+    console.log('=== 收到请求 ===', event.httpMethod);
     
-    // 设置CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    // 设置CORS头
+    const headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Content-Type': 'application/json'
+    };
     
-    // 处理OPTIONS预检
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
+    // 处理OPTIONS预检请求
+    if (event.httpMethod === 'OPTIONS') {
+        return {
+            statusCode: 200,
+            headers,
+            body: ''
+        };
     }
     
-    // 处理GET请求
-    if (req.method === 'GET') {
-        return res.status(200).json({
-            status: 'success',
-            message: '后端服务正常运行！',
-            timestamp: new Date().toISOString()
-        });
+    // 处理GET请求 - 测试用
+    if (event.httpMethod === 'GET') {
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+                status: 'success',
+                message: '后端服务正常运行！',
+                timestamp: new Date().toISOString()
+            })
+        };
     }
     
     // 处理POST请求
-    if (req.method === 'POST') {
+    if (event.httpMethod === 'POST') {
         try {
-            // 解析请求体
-            const requestBody = req.body;
-            const message = requestBody.message;
-            const scene = requestBody.scene;
+            // 解析请求体 - Netlify 格式
+            let requestBody;
+            try {
+                requestBody = JSON.parse(event.body);
+            } catch (e) {
+                requestBody = {};
+            }
+            
+            const message = requestBody.message || '';
+            const scene = requestBody.scene || 'homework';
             const userTypeFromRequest = requestBody.userType || 'free';
             const requireFullReply = requestBody.requireFullReply || false;
             
@@ -58,10 +75,14 @@ module.exports = async (req, res) => {
             // 获取API密钥
             const apiKey = process.env.DEEPSEEK_API_KEY;
             if (!apiKey) {
-                return res.status(500).json({
-                    success: false,
-                    error: '服务器配置错误：API密钥未设置'
-                });
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: JSON.stringify({
+                        success: false,
+                        error: '服务器配置错误：API密钥未设置'
+                    })
+                };
             }
             
             // 判断是否为付费用户
@@ -101,7 +122,7 @@ module.exports = async (req, res) => {
                             content: systemPrompt
                         },
                         {
-                            role: "user",
+                            role: "user", 
                             content: `场景：${scene}，问题：${message}`
                         }
                     ],
@@ -120,20 +141,35 @@ module.exports = async (req, res) => {
             
             if (data.choices && data.choices.length > 0) {
                 console.log('AI回复成功，长度:', data.choices[0].message.content.length);
-                res.status(200).json({
-                    success: true,
-                    reply: data.choices[0].message.content
-                });
+                return {
+                    statusCode: 200,
+                    headers,
+                    body: JSON.stringify({
+                        success: true,
+                        reply: data.choices[0].message.content
+                    })
+                };
             } else {
                 throw new Error('AI返回数据格式异常');
             }
             
         } catch (error) {
             console.error('处理错误:', error);
-            res.status(500).json({
-                success: false,
-                error: '服务暂时不可用: ' + error.message
-            });
+            return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({
+                    success: false,
+                    error: '服务暂时不可用: ' + error.message
+                })
+            };
         }
     }
+    
+    // 其他方法返回405
+    return {
+        statusCode: 405,
+        headers,
+        body: JSON.stringify({ error: '方法不允许' })
+    };
 };
