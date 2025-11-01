@@ -1,6 +1,4 @@
 // 修复版后端代码 - 无重复变量声明
-const fetch = require('node-fetch');
-
 // 专业版提示词系统
 const scenePrompts = {
     // 完整专业回复
